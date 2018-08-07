@@ -3,8 +3,6 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-USE_CUDA = False
-
 class seq_rewriter(nn.Module):
     def __init__(self, options):
         super(seq_rewriter, self).__init__()
@@ -32,16 +30,19 @@ class seq_rewriter(nn.Module):
         new_seq = torch.zeros(sentence_batch.size(0)*sentence_batch.size(1)).long()
         for i in xrange(probs.size(0)):
             m = Categorical(probs[i])
-            action = m.sample()
-            self.saved_log_probs.append(m.log_prob(action))
-            if i % sentence_batch.size(1) < 10:
-                new_seq[i] = action.data[0]
+            if self.training:
+                action = m.sample()
+                self.saved_log_probs.append(m.log_prob(action))
+            else:
+                _, action = torch.max(probs[i].data, 0)
+            
+            # if i % sentence_batch.size(1) < 10:
+            new_seq[i] = action.data[0]
 
             # if new_seq[i] %  
 
         new_seq = new_seq.view(sentence_batch.size(0), sentence_batch.size(1))
-        if USE_CUDA:
-            new_seq = new_seq.cuda()
+        
         return new_seq
 
 def main():

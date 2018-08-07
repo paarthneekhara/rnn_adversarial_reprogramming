@@ -30,7 +30,7 @@ def evaluate(model, data_x, data_y, options):
             batch_x = batch_x.cuda()
             batch_y = batch_y.cuda()
         # print batch_x.shape
-        pred_logits, _ = model(batch_x)
+        pred_logits = model(batch_x)
         _, predictions = torch.max(pred_logits, 1)
         # print predictions
         correct_preds += torch.sum((predictions == batch_y).double())
@@ -61,7 +61,7 @@ def evaluate_rewriter(lstm_model, seq_model, data_x, data_y, options):
         rewritten_x = seq_model(batch_x)
 
         # print batch_x.shape
-        pred_logits, _ = lstm_model(rewritten_x)
+        pred_logits = lstm_model(rewritten_x)
         _, predictions = torch.max(pred_logits, 1)
         # print predictions
         correct_preds += torch.sum((predictions == batch_y).double())
@@ -121,7 +121,7 @@ def train_seq_rewriter(data_x, data_y, val_x, val_y, options = {}):
 
             rewritten_x = seq_model(batch_x)
 
-            pred_logits, _ = lstm_model(rewritten_x)
+            pred_logits = lstm_model(rewritten_x)
             _, predictions = torch.max(pred_logits, 1)
             pred_correctness = (predictions == batch_y).float()
             # print pred_correctness
@@ -216,7 +216,7 @@ def train_lstm(training_x, training_y, val_x, val_y, options = {}):
             batch_y = Variable(torch.from_numpy(batch_y))
 
             # print batch_x.shape
-            pred_logits, _ = model(batch_x)
+            pred_logits = model(batch_x)
             # _, predictions = torch.max(pred_logits, 1)
             # print predictions
             
@@ -273,6 +273,7 @@ def main():
     testing_classes = []
     for class_name in name_data:
         names = name_data[class_name]
+        print len(names)
         for name in names:
             name_np = np.zeros(MAX_NAME_LENGTH)
             for idx, ch in enumerate(name):
@@ -292,6 +293,7 @@ def main():
     random.shuffle(training_data)
     random.shuffle(testing_data)
 
+    print len(training_data), len(testing_data), len(training_classes), len(testing_classes)
     # print len(training_data), "check"
     # sdhfjkshd
     val_data = training_data[:-len(training_data)/5]
@@ -328,6 +330,8 @@ def main():
         'idx_to_char' : idx_to_char
     }
 
+    
+    print hkjhkj
     train_seq_rewriter(testing_x, testing_y, testing_val_x, testing_val_y, options)
 
 if __name__ == '__main__':

@@ -20,6 +20,9 @@ class NamesTrainingData(Dataset):
             files = all_files[:13]
         if 'test' in dataset_type:
             files = all_files[13:]
+
+        print files
+        
         char_vocab = {}
         name_data = {}
         

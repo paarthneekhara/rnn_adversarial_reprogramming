@@ -30,7 +30,7 @@ def main():
     if args.dataset == "Names":
         train_dataset = datasets.NamesTrainingData(dataset_type = 'train')
         val_dataset = datasets.NamesTrainingData(dataset_type = 'train_val')
-
+    
     model = model_lstm.charRNN({
         'vocab_size' : len(train_dataset.idx_to_char),
         'hidden_size' : 200,
@@ -57,7 +57,8 @@ def main():
                                         })
 
     checkpoints_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.dataset)
-    
+    if not os.path.exists(checkpoints_dir):
+        os.makedirs(checkpoints_dir)
     
     training_log = {
         'log' : [],
@@ -65,13 +66,14 @@ def main():
         'best_accuracy' : 0.0
     }
 
-    if not os.path.exists(checkpoints_dir):
-        os.makedirs(checkpoints_dir)
+    
 
     @trainer.on(Events.ITERATION_COMPLETED)
     def log_training_loss(trainer):
+        total_batches =  int(len(train_dataset)/args.batch_size)
         if trainer.state.iteration % 100 == 0:
-            print("Epoch[{}] Iteration[{}] Loss: {:.2f}".format(trainer.state.epoch, trainer.state.iteration,trainer.state.output))
+            print("Epoch[{}] Iteration[{}] Total Iterations[{}] Loss: {:.2f}".format(
+                trainer.state.epoch, trainer.state.iteration, total_batches, trainer.state.output))
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(trainer):
