@@ -12,8 +12,10 @@ class seq_rewriter(nn.Module):
         self.char_embedding.weight.data = torch.eye(options['vocab_size'])
         self.char_embedding.weight.requires_grad = False
 
-        self.conv1 = nn.Conv1d(options['vocab_size'], options['target_size'], kernel_size = 3, padding = 1)
+        self.conv1 = nn.Conv1d(options['vocab_size'], options['target_size'], 
+            kernel_size = options['filter_width'], padding = int(options['filter_width']/2))
         self.saved_log_probs = []
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # self.lstm = nn.LSTM(options['vocab_size'], options['hidden_size'], batch_first = True)
         # self.output_layer = nn.Linear(options['hidden_size'], options['target_size'])
         
@@ -25,24 +27,14 @@ class seq_rewriter(nn.Module):
         
         logits = logits.view(logits.size(0) * logits.size(1), logits.size(2))
         probs = F.softmax(logits)
-
-        # prediction = []
-        new_seq = torch.zeros(sentence_batch.size(0)*sentence_batch.size(1)).long()
-        for i in xrange(probs.size(0)):
-            m = Categorical(probs[i])
-            if self.training:
-                action = m.sample()
-                self.saved_log_probs.append(m.log_prob(action))
-            else:
-                _, action = torch.max(probs[i].data, 0)
-            
-            # if i % sentence_batch.size(1) < 10:
-            new_seq[i] = action.data[0]
-
-            # if new_seq[i] %  
-
-        new_seq = new_seq.view(sentence_batch.size(0), sentence_batch.size(1))
+        m = Categorical(probs)
+        if self.training:
+            new_seq = m.sample()
+        else:
+            _, new_seq = torch.max(probs, 1)
         
+        self.saved_log_probs = m.log_prob(new_seq)
+        new_seq = new_seq.view(sentence_batch.size(0), sentence_batch.size(1))
         return new_seq
 
 def main():

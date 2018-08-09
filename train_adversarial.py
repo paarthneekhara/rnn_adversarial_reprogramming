@@ -26,35 +26,52 @@ def main():
                         help='Save Checkpoint Every')
     parser.add_argument('--dataset', type=str, default="Names",
                         help='Output filename')
+    parser.add_argument('--base_dataset', type=str, default="Names",
+                        help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
                         help='Check Points Directory')
     parser.add_argument('--continue_training', type=str, default="False",
                         help='Continue Training')
+    parser.add_argument('--filter_width', type=int, default=3,
+                        help='Filter Width')
+    parser.add_argument('--lstm_hidden_units', type=int, default=200,
+                        help='lstm_hidden_units')
+    parser.add_argument('--random_network', type=str, default="False",
+                        help='Random Network')
 
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    
+    base_train_dataset = datasets.get_dataset(args.base_dataset, dataset_type = 'train')
+
     if args.dataset == "Names":
-        base_train_dataset = datasets.NamesTrainingData(dataset_type = 'train')
-        train_dataset = datasets.NamesTrainingData(dataset_type = 'test')
-        val_dataset = datasets.NamesTrainingData(dataset_type = 'test_val')
+        train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'test')
+        val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'test_val')
+    else:
+        train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
+        val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'val')
 
     lstm_model = model_lstm.charRNN({
         'vocab_size' : len(base_train_dataset.idx_to_char),
-        'hidden_size' : 200,
+        'hidden_size' : args.lstm_hidden_units,
         'target_size' : len(base_train_dataset.classes)
     })
 
     lstm_ckpt_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.dataset)
     lstm_ckpt_name = "{}/best_model.pth".format(lstm_ckpt_dir)
-    lstm_model.load_state_dict(torch.load(lstm_ckpt_name))
+    if args.random_network != "True":
+        lstm_model.load_state_dict(torch.load(lstm_ckpt_name))
+    else:
+        print "Random LSTM network.."
     lstm_model.eval()
     lstm_loss_criterion = nn.CrossEntropyLoss()
 
     seq_model = seq_rewriter.seq_rewriter({
         'vocab_size' : len(train_dataset.idx_to_char),
-        'target_size' : len(base_train_dataset.idx_to_char)
+        'target_size' : len(base_train_dataset.idx_to_char),
+        'filter_width' : args.filter_width
     })
 
     new_classifier = nn.Sequential(seq_model, lstm_model)
@@ -67,15 +84,16 @@ def main():
     optimizer = optim.Adam(parameters, lr=args.learning_rate)
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
-                        shuffle=True, num_workers=4)
+                        shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
-                        shuffle=True, num_workers=4)
+                        shuffle=True, num_workers=0)
     evaluator = create_supervised_evaluator(new_classifier,
                                         metrics={
                                             'accuracy': CategoricalAccuracy(),
                                         })
     
-    checkpoints_dir = "{}/{}_adversarial".format(args.checkpoints_directory, args.dataset)
+    checkpoint_suffix = "{}_{}_{}_random_{}".format(args.learning_rate, args.filter_width, args.batch_size, args.random_network)
+    checkpoints_dir = "{}/{}_adversarial_{}".format(args.checkpoints_directory, args.dataset, checkpoint_suffix)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
@@ -111,6 +129,7 @@ def main():
             # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
             seq_rewriter_loss = 0
             for idx, log_prob in enumerate(seq_model.saved_log_probs):
+#                 print idx, log_prob
                 max_length_to_update = 20
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
                     seq_rewriter_loss += (-log_prob * rewards[idx/batch[0].size()[1]])
@@ -118,15 +137,16 @@ def main():
             optimizer.zero_grad()
             seq_rewriter_loss.backward()
             optimizer.step()
-            del seq_model.saved_log_probs[:]
-
+#             print "done backward"
+            seq_model.saved_log_probs = None
+#             print "Deleted"
             batch_reward = torch.sum(rewards)
             running_reward -= running_reward/(args.log_every_batch * 1.0)
             running_reward += batch_reward/(args.log_every_batch * 1.0)
 
             if batch_idx % args.log_every_batch == 0:
                 print ("Epoch[{}] Iteration[{}] Running Reward[{}]".format(epoch, batch_idx, running_reward))
-                training_log['running_reward'].append(float(running_reward.numpy()))
+                training_log['running_reward'].append(float(running_reward.cpu().numpy()))
 
         evaluator.run(train_loader)
         training_metrics = evaluator.state.metrics

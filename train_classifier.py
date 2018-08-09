@@ -22,32 +22,33 @@ def main():
                         help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
                         help='Check Points Directory')
-
+    parser.add_argument('--lstm_hidden_units', type=int, default=200,
+                        help='lstm_hidden_units')
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if args.dataset == "Names":
-        train_dataset = datasets.NamesTrainingData(dataset_type = 'train')
-        val_dataset = datasets.NamesTrainingData(dataset_type = 'train_val')
     
+    train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
+    val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train_val')
+
     model = model_lstm.charRNN({
         'vocab_size' : len(train_dataset.idx_to_char),
-        'hidden_size' : 200,
+        'hidden_size' : args.lstm_hidden_units,
         'target_size' : len(train_dataset.classes)
     })
-    
+    print device
     model.to(device)
 
     parameters = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = optim.Adam(parameters, lr=args.learning_rate)
     loss_criterion = nn.CrossEntropyLoss()
 
-
+    print "check", torch.cuda.is_available()
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
-                        shuffle=True, num_workers=4)
+                        shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
-                        shuffle=True, num_workers=4)
+                        shuffle=True, num_workers=0)
 
     trainer = create_supervised_trainer(model, optimizer, loss_criterion)
     evaluator = create_supervised_evaluator(model,
