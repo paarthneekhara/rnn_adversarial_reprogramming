@@ -74,6 +74,7 @@ class NamesTrainingData(Dataset):
         self.char_to_idx = char_to_idx
         self.x = np.array([row[0] for row in data],dtype = 'int64' )
         self.y = np.array([row[1] for row in data], dtype = 'int64')
+        self.seq_length = MAX_NAME_LENGTH
         print len(self.x), len(self.y)
         # print self.y
         self.to_tensor = transforms.ToTensor()
@@ -169,7 +170,8 @@ class QuestionLabels(Dataset):
         self.idx_to_char = idx_to_char
         self.char_to_idx = char_to_idx
         self.classes = class_names
-
+        self.seq_length = MAX_LINE_LENGTH
+        
     def __len__(self):
         return len(self.y)
 

@@ -16,12 +16,13 @@ class seq_rewriter(nn.Module):
             kernel_size = options['filter_width'], padding = int(options['filter_width']/2))
         self.saved_log_probs = []
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.target_seq_length = options['target_sequence_length']
         # self.lstm = nn.LSTM(options['vocab_size'], options['hidden_size'], batch_first = True)
         # self.output_layer = nn.Linear(options['hidden_size'], options['target_size'])
         
 
     def forward(self, sentence_batch):
-
+        sentence_batch = F.pad(sentence_batch, (0, target_sequence_length - sentence_batch.size()[1]))
         one_hot = self.char_embedding(sentence_batch)
         logits = self.conv1(one_hot.permute(0, 2, 1)).permute(0, 2, 1).contiguous()
         

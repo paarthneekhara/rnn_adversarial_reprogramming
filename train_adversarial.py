@@ -71,7 +71,8 @@ def main():
     seq_model = seq_rewriter.seq_rewriter({
         'vocab_size' : len(train_dataset.idx_to_char),
         'target_size' : len(base_train_dataset.idx_to_char),
-        'filter_width' : args.filter_width
+        'filter_width' : args.filter_width,
+        'target_sequence_length' : base_train_dataset.seq_length
     })
 
     new_classifier = nn.Sequential(seq_model, lstm_model)
@@ -93,7 +94,8 @@ def main():
                                         })
     
     checkpoint_suffix = "{}_{}_{}_random_{}".format(args.learning_rate, args.filter_width, args.batch_size, args.random_network)
-    checkpoints_dir = "{}/{}_adversarial_{}".format(args.checkpoints_directory, args.dataset, checkpoint_suffix)
+    checkpoints_dir = "{}/{}_adversarial_base_{}, {}".format(args.checkpoints_directory, args.dataset, 
+        args.base_dataset, checkpoint_suffix)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
