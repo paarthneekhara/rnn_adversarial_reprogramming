@@ -14,7 +14,7 @@ import json
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--learning_rate', type=float, default=0.01,
+    parser.add_argument('--learning_rate', type=float, default=0.0001,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='Output filename')
@@ -59,7 +59,7 @@ def main():
         'target_size' : len(base_train_dataset.classes)
     })
 
-    lstm_ckpt_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.dataset)
+    lstm_ckpt_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.base_dataset)
     lstm_ckpt_name = "{}/best_model.pth".format(lstm_ckpt_dir)
     if args.random_network != "True":
         lstm_model.load_state_dict(torch.load(lstm_ckpt_name))
@@ -134,7 +134,7 @@ def main():
 #                 print idx, log_prob
                 max_length_to_update = 20
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
-                    seq_rewriter_loss += (-log_prob * rewards[idx/batch[0].size()[1]])
+                    seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
 
             optimizer.zero_grad()
             seq_rewriter_loss.backward()

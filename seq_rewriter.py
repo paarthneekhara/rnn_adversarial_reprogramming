@@ -22,7 +22,11 @@ class seq_rewriter(nn.Module):
         
 
     def forward(self, sentence_batch):
-        sentence_batch = F.pad(sentence_batch, (0, target_sequence_length - sentence_batch.size()[1]))
+        if self.target_seq_length > sentence_batch.size()[1]:
+            sentence_batch = F.pad(sentence_batch, (0, self.target_seq_length - sentence_batch.size()[1]))
+        else:
+            sentence_batch = sentence_batch[:,0:self.target_seq_length]
+            
         one_hot = self.char_embedding(sentence_batch)
         logits = self.conv1(one_hot.permute(0, 2, 1)).permute(0, 2, 1).contiguous()
         

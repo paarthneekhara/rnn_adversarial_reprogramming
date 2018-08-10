@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 import random
 from torchvision import transforms
 from torch.autograd import Variable
+import os
 
 class NamesTrainingData(Dataset):
     """Face Landmarks dataset."""
@@ -171,7 +172,78 @@ class QuestionLabels(Dataset):
         self.char_to_idx = char_to_idx
         self.classes = class_names
         self.seq_length = MAX_LINE_LENGTH
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx):
+        # sample = {'x': self.x[idx], 'y': self.y[idx]}
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        return torch.from_numpy( self.x[idx]).to(device), torch.from_numpy(self.y[idx:idx+1]).to(device)[0]
+
+
+class TwitterArabic(Dataset):
+    def findFiles(self, path): return glob.glob(path)
+
+    def __init__(self, dir_path = 'data/Twitter', dataset_type = 'train', split = 0.80):
         
+        all_tweets = []
+        
+
+        for idx in range(1000):
+            with open(os.path.join( os.path.join(dir_path, "Positive"), "positive{}.txt".format(idx+1) )) as f:
+                all_tweets.append((f.read().split(), 0))
+            with open(os.path.join( os.path.join(dir_path, "Negative"), "negative{}.txt".format(idx+1) )) as f:
+                all_tweets.append((f.read().split(), 1))
+        
+        vocab_count = {}
+        MAX_LINE_LENGTH = 0
+        for tweet in all_tweets:
+            for word in tweet[0]:
+                if word in vocab_count:
+                    vocab_count[word] += 1
+                else:
+                    vocab_count[word] = 0
+            if len(tweet[0]) > MAX_LINE_LENGTH:
+                MAX_LINE_LENGTH = len(tweet[0])
+        
+        new_vocab = {word : True for word in vocab_count if vocab_count[word] > 1}
+        idx_to_char = [char for char in new_vocab]
+        idx_to_char = ["<END>", "<UNK>"] + idx_to_char
+        char_to_idx = {idx_to_char[i]:i for i in range(len(idx_to_char))}
+        # print MAX_LINE_LENGTH
+        val_split_idx = int(split * len(all_tweets))
+        if not "val" in dataset_type:
+            all_tweets = all_tweets[:val_split_idx]
+            print "Train Split"
+        else:
+            all_tweets = all_tweets[val_split_idx:]
+            print "Val split"
+
+
+        MAX_LINE_LENGTH = min(MAX_LINE_LENGTH, 40)
+        x = []
+        y = []
+        for tweet in all_tweets:
+            word_list = tweet[0]
+            word_list.reverse()
+            line_np = np.zeros(MAX_LINE_LENGTH)
+            for widx, word in enumerate(word_list[:MAX_LINE_LENGTH]):
+                if word in char_to_idx:
+                    line_np[widx] = char_to_idx[word]
+                else:
+                    line_np[widx] = char_to_idx["<UNK>"]
+            
+            x.append(line_np)
+            y.append(tweet[1])
+
+        self.x = np.array(x, dtype = 'int64')
+        self.y = np.array(y, dtype = 'int64')
+        self.idx_to_char = idx_to_char
+        self.char_to_idx = char_to_idx
+        self.classes = ["positive", "negative"]
+        self.seq_length = MAX_LINE_LENGTH
+
     def __len__(self):
         return len(self.y)
 
@@ -186,8 +258,11 @@ def get_dataset(dataset_name, dataset_type):
         return NamesTrainingData(dataset_type = dataset_type)
     elif dataset_name == "QuestionLabels":
         return QuestionLabels(dataset_type = dataset_type)
+    elif dataset_name == "TwitterArabic":
+        return TwitterArabic(dataset_type = dataset_type)
+
 def main():
-    ndset = QuestionLabels()
+    ndset = TwitterArabic()
 
 if __name__ == '__main__':
     main()

@@ -2,3 +2,4 @@ data/*
 CKPTS/*
 data.zip
 *.pyc
+.DS_Store
