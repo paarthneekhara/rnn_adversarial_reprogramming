@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import model_lstm
+import model_classifier
 import argparse
 import datasets
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
@@ -24,8 +24,8 @@ def main():
                         help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
                         help='Check Points Directory')
-    parser.add_argument('--lstm_hidden_units', type=int, default=256,
-                        help='lstm_hidden_units')
+    parser.add_argument('--hidden_units', type=int, default=256,
+                        help='hidden_units')
     parser.add_argument('--embedding_size', type=int, default=256,
                         help='embedding_size')
     parser.add_argument('--classifier_type', type=str, default="charRNN",
@@ -42,31 +42,31 @@ def main():
     if args.classifier_type == "charRNN":
         model_options = {
             'vocab_size' : len(train_dataset.idx_to_char),
-            'hidden_size' : args.lstm_hidden_units,
+            'hidden_size' : args.hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         }
-        model = model_lstm.charRNN(model_options)
+        model = model_classifier.charRNN(model_options)
         print "char RNN"
 
     if args.classifier_type == "biRNN":
         model_options = {
             'vocab_size' : len(train_dataset.idx_to_char),
-            'hidden_size' : args.lstm_hidden_units,
+            'hidden_size' : args.hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         }
-        model = model_lstm.biRNN(model_options)
+        model = model_classifier.biRNN(model_options)
         print "BI RNN"
 
     if args.classifier_type == "CNN":
         model_options = {
             'vocab_size' : len(train_dataset.idx_to_char),
-            'hidden_size' : args.lstm_hidden_units,
+            'hidden_size' : args.hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         }
-        model = model_lstm.CnnTextClassifier(model_options)
+        model = model_classifier.CnnTextClassifier(model_options)
         print "CnnTextClassifier"
 
     print device

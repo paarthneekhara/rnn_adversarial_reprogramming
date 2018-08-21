@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 # from torch.autograd import Variable
 
-class charRNN(nn.Module):
+class uniRNN(nn.Module):
     def __init__(self, options):
         super(charRNN, self).__init__()
         self.options = options

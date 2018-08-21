@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import model_lstm, seq_rewriter
+import model_classifier, seq_rewriter
 import argparse
 import datasets
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
@@ -34,8 +34,8 @@ def main():
                         help='Continue Training')
     parser.add_argument('--filter_width', type=int, default=3,
                         help='Filter Width')
-    parser.add_argument('--lstm_hidden_units', type=int, default=256,
-                        help='lstm_hidden_units')
+    parser.add_argument('--hidden_units', type=int, default=256,
+                        help='hidden_units')
     parser.add_argument('--embedding_size', type=int, default=256,
                         help='embedding_size')
     parser.add_argument('--random_network', type=str, default="False",
@@ -58,22 +58,31 @@ def main():
         val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'val')
 
     if args.classifier_type == "charRNN":
-        lstm_model = model_lstm.charRNN({
+        lstm_model = model_classifier.uniRNN({
             'vocab_size' : len(train_dataset.idx_to_char),
-            'hidden_size' : args.lstm_hidden_units,
+            'hidden_size' : args.hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         })
         print "char RNN"
 
     if args.classifier_type == "biRNN":
-        lstm_model = model_lstm.biRNN({
+        lstm_model = model_classifier.biRNN({
             'vocab_size' : len(train_dataset.idx_to_char),
-            'hidden_size' : args.lstm_hidden_units,
+            'hidden_size' : args.hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         })
         print "BI RNN"
+
+    if args.classifier_type == "CNN":
+        lstm_model = model_classifier.CnnTextClassifier({
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+        })
+        print "CnnTextClassifier"
 
     lstm_ckpt_dir = "{}/{}_classifer_{}".format(args.checkpoints_directory, args.base_dataset, args.classifier_type)
     lstm_ckpt_name = "{}/best_model.pth".format(lstm_ckpt_dir)
