@@ -9,26 +9,98 @@ import os
 import re
 
 class NamesTrainingData(Dataset):
+
     """Face Landmarks dataset."""
-    def findFiles(self, path): return glob.glob(path)
+    def findFiles(self, path):
+        return glob.glob(path)
 
     def __init__(self, file_paths = 'data/names/*.txt', dataset_type = 'train', split = 0.80):
-        """
-        Args:
-            
-        """
         all_files = self.findFiles(file_paths)
-        if 'train' in dataset_type:
-            files = ['data/names/Czech.txt', 'data/names/German.txt', 'data/names/Arabic.txt', 
-            'data/names/Japanese.txt', 'data/names/Chinese.txt', 
-            'data/names/Vietnamese.txt', 'data/names/Russian.txt', 
-            'data/names/French.txt', 'data/names/Irish.txt', 
-            'data/names/English.txt', 'data/names/Spanish.txt', 
-            'data/names/Greek.txt', 'data/names/Italian.txt', 'data/names/Portuguese.txt', 'data/names/Scottish.txt', 
-            'data/names/Dutch.txt', 'data/names/Korean.txt', 'data/names/Polish.txt']
-#         if 'test' in dataset_type: ######### COMMENTED so we can train on entire names dataset ############
-#             files = ['data/names/Portuguese.txt', 'data/names/Scottish.txt', 
-#             'data/names/Dutch.txt', 'data/names/Korean.txt', 'data/names/Polish.txt']
+
+        files = ['data/names/Czech.txt', 'data/names/German.txt', 'data/names/Arabic.txt', 
+        'data/names/Japanese.txt', 'data/names/Chinese.txt', 
+        'data/names/Vietnamese.txt', 'data/names/Russian.txt', 
+        'data/names/French.txt', 'data/names/Irish.txt', 
+        'data/names/English.txt', 'data/names/Spanish.txt', 
+        'data/names/Greek.txt', 'data/names/Italian.txt', 'data/names/Portuguese.txt', 'data/names/Scottish.txt', 
+        'data/names/Dutch.txt', 'data/names/Korean.txt', 'data/names/Polish.txt']
+        # if 'test' in dataset_type: ######### COMMENTED so we can train on entire names dataset ############
+        #     files = ['data/names/Portuguese.txt', 'data/names/Scottish.txt', 
+        #     'data/names/Dutch.txt', 'data/names/Korean.txt', 'data/names/Polish.txt']
+
+        print files
+
+        char_vocab = {}
+        name_data = {}
+        
+        MAX_NAME_LENGTH = 0
+        for file in files:
+            with open(file) as f:
+                names = f.read().split("\n")[0:-1]
+                name_data[file] = names
+                for name in names:
+                    if len(name) > MAX_NAME_LENGTH: MAX_NAME_LENGTH = len(name)
+                    for ch in name: char_vocab[ch] = True
+        
+        idx_to_char = [char for char in char_vocab]
+        idx_to_char.sort()
+        idx_to_char = ['end'] + idx_to_char
+        char_to_idx = {idx_to_char[i]:i for i in range(len(idx_to_char))}
+        
+        class_no = 0
+        data = []
+        classes = []
+        for class_name in name_data:
+            names = name_data[class_name]
+            for name in names:
+                name_np = np.zeros(MAX_NAME_LENGTH)
+                for idx, ch in enumerate(name):
+                    name_np[idx] = char_to_idx[ch]
+                    data.append((name_np, class_no))
+
+            classes.append(class_name)
+            class_no += 1
+
+        random.shuffle(data)
+
+        val_split_idx = int(len(data) * split)
+        print val_split_idx
+        if 'val' in dataset_type:
+            data = data[val_split_idx:]
+        else:
+            data = data[:val_split_idx]
+
+        # print data
+        self.classes = classes
+        self.idx_to_char = idx_to_char
+        self.char_to_idx = char_to_idx
+        self.x = np.array([row[0] for row in data],dtype = 'int64' )
+        self.y = np.array([row[1] for row in data], dtype = 'int64')
+        self.seq_length = MAX_NAME_LENGTH
+        print len(self.x), len(self.y)
+        # print self.y
+        self.to_tensor = transforms.ToTensor()
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx):
+        # sample = {'x': self.x[idx], 'y': self.y[idx]}
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        return torch.from_numpy( self.x[idx]).to(device), torch.from_numpy(self.y[idx:idx+1]).to(device)[0]
+
+class SubNamesTrainingData(Dataset):
+
+    """Face Landmarks dataset."""
+    def findFiles(self, path):
+        return glob.glob(path)
+
+    def __init__(self, file_paths = 'data/names/*.txt', dataset_type = 'train', split = 0.80):
+        all_files = self.findFiles(file_paths)
+
+        
+        files = ['data/names/Portuguese.txt', 'data/names/Scottish.txt', 
+        'data/names/Dutch.txt', 'data/names/Korean.txt', 'data/names/Polish.txt']
 
         print files
 
@@ -380,6 +452,8 @@ class IMDB(Dataset):
 def get_dataset(dataset_name, dataset_type):
     if dataset_name == "Names":
         return NamesTrainingData(dataset_type = dataset_type)
+    elif dataset_name == "SubNames":
+        return SubNamesTrainingData(dataset_type = dataset_type)
     elif dataset_name == "QuestionLabels":
         return QuestionLabels(dataset_type = dataset_type)
     elif dataset_name == "TwitterArabic":

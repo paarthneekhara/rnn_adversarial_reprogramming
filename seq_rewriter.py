@@ -15,6 +15,7 @@ class seq_rewriter(nn.Module):
         self.conv1 = nn.Conv1d(options['vocab_size'], options['target_size'], 
             kernel_size = options['filter_width'], padding = int(options['filter_width']/2))
         self.saved_log_probs = []
+        self.entropy = None
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.target_seq_length = options['target_sequence_length']
         # self.lstm = nn.LSTM(options['vocab_size'], options['hidden_size'], batch_first = True)
@@ -32,6 +33,9 @@ class seq_rewriter(nn.Module):
         
         logits = logits.view(logits.size(0) * logits.size(1), logits.size(2))
         probs = F.softmax(logits)
+        # log_probs = prob.log()
+        self.entropy = -(probs*probs.log()).mean()
+
         m = Categorical(probs)
         if self.training:
             new_seq = m.sample()

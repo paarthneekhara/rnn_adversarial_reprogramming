@@ -14,7 +14,9 @@ import json
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--learning_rate', type=float, default=0.0001,
+    parser.add_argument('--learning_rate', type=float, default=0.01,
+                        help='Output filename')
+    parser.add_argument('--reg', type=float, default=1.0,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='Output filename')
@@ -32,7 +34,7 @@ def main():
                         help='Check Points Directory')
     parser.add_argument('--continue_training', type=str, default="False",
                         help='Continue Training')
-    parser.add_argument('--filter_width', type=int, default=3,
+    parser.add_argument('--filter_width', type=int, default=5,
                         help='Filter Width')
     parser.add_argument('--hidden_units', type=int, default=256,
                         help='hidden_units')
@@ -50,36 +52,33 @@ def main():
     
     base_train_dataset = datasets.get_dataset(args.base_dataset, dataset_type = 'train')
 
-    if args.dataset == "Names":
-        train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'test')
-        val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'test_val')
-    else:
-        train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
-        val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'val')
+    
+    train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
+    val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'val')
 
     if args.classifier_type == "charRNN":
         lstm_model = model_classifier.uniRNN({
-            'vocab_size' : len(train_dataset.idx_to_char),
+            'vocab_size' : len(base_train_dataset.idx_to_char),
             'hidden_size' : args.hidden_units,
-            'target_size' : len(train_dataset.classes),
+            'target_size' : len(base_train_dataset.classes),
             'embedding_size' : args.embedding_size
         })
         print "char RNN"
 
     if args.classifier_type == "biRNN":
         lstm_model = model_classifier.biRNN({
-            'vocab_size' : len(train_dataset.idx_to_char),
+            'vocab_size' : len(base_train_dataset.idx_to_char),
             'hidden_size' : args.hidden_units,
-            'target_size' : len(train_dataset.classes),
+            'target_size' : len(base_train_dataset.classes),
             'embedding_size' : args.embedding_size
         })
         print "BI RNN"
 
     if args.classifier_type == "CNN":
         lstm_model = model_classifier.CnnTextClassifier({
-            'vocab_size' : len(train_dataset.idx_to_char),
+            'vocab_size' : len(base_train_dataset.idx_to_char),
             'hidden_size' : args.hidden_units,
-            'target_size' : len(train_dataset.classes),
+            'target_size' : len(base_train_dataset.classes),
             'embedding_size' : args.embedding_size
         })
         print "CnnTextClassifier"
@@ -157,11 +156,17 @@ def main():
             rewards = pred_correctness
             # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
             seq_rewriter_loss = 0
+            max_length_to_update = 100
             for idx, log_prob in enumerate(seq_model.saved_log_probs):
 #                 print idx, log_prob
-                max_length_to_update = 20
+                
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
                     seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
+
+            seq_rewriter_loss /= (args.batch_size * max_length_to_update)
+            print "Without reg", seq_rewriter_loss
+            seq_rewriter_loss += (- args.reg * seq_model.entropy)
+            print "With reg", seq_rewriter_loss
 
             optimizer.zero_grad()
             seq_rewriter_loss.backward()

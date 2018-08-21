@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class uniRNN(nn.Module):
     def __init__(self, options):
-        super(charRNN, self).__init__()
+        super(uniRNN, self).__init__()
         self.options = options
         print options
         self.char_embedding = nn.Embedding(options['vocab_size'], options['embedding_size'])
