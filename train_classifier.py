@@ -46,7 +46,7 @@ def main():
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
         }
-        model = model_classifier.charRNN(model_options)
+        model = model_classifier.uniRNN(model_options)
         print "char RNN"
 
     if args.classifier_type == "biRNN":
