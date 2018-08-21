@@ -18,6 +18,8 @@ def main():
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Output filename')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='Epochs')
     parser.add_argument('--dataset', type=str, default="Names",
                         help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
@@ -38,23 +40,35 @@ def main():
 
 
     if args.classifier_type == "charRNN":
-        model = model_lstm.charRNN({
+        model_options = {
             'vocab_size' : len(train_dataset.idx_to_char),
             'hidden_size' : args.lstm_hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
-        })
+        }
+        model = model_lstm.charRNN(model_options)
         print "char RNN"
 
     if args.classifier_type == "biRNN":
-        model = model_lstm.biRNN({
+        model_options = {
             'vocab_size' : len(train_dataset.idx_to_char),
             'hidden_size' : args.lstm_hidden_units,
             'target_size' : len(train_dataset.classes),
             'embedding_size' : args.embedding_size
-
-        })
+        }
+        model = model_lstm.biRNN(model_options)
         print "BI RNN"
+
+    if args.classifier_type == "CNN":
+        model_options = {
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.lstm_hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+        }
+        model = model_lstm.CnnTextClassifier(model_options)
+        print "CnnTextClassifier"
+
     print device
     model.to(device)
 
@@ -80,6 +94,7 @@ def main():
         os.makedirs(checkpoints_dir)
     
     training_log = {
+        'model_options' : model_options,
         'log' : [],
         'best_epoch' : 0,
         'best_accuracy' : 0.0
@@ -127,7 +142,7 @@ def main():
         with open("{}/training_log.json".format(checkpoints_dir), 'w') as f:
             f.write(json.dumps(training_log))
     
-    trainer.run(train_loader, max_epochs=200)
+    trainer.run(train_loader, max_epochs=args.epochs)
     
 if __name__ == '__main__':
     main()
