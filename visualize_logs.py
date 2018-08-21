@@ -21,20 +21,24 @@ def main():
         validation_accuracy.append(iter_details['evaluation_metrics']['accuracy'])
         epochs.append(epoch)
 
-    minibatch_steps = []
-    running_rewards = []
-    for minibatch_step, running_reward in enumerate(training_logs['running_reward']):
-        minibatch_steps.append(minibatch_step)
-        running_rewards.append(running_reward)
+    
 
     plt.plot(epochs, training_accuracy, label = "training accuracy")
     plt.plot(epochs, validation_accuracy, label = "validation accuracy")
     plt.legend()
     plt.show()
 
-    plt.plot(minibatch_steps, running_rewards, label = "running reward")
-    plt.legend()
-    plt.show()
+
+    if 'running_rewards' in training_logs:
+        minibatch_steps = []
+        running_rewards = []
+        for minibatch_step, running_reward in enumerate(training_logs['running_reward']):
+            minibatch_steps.append(minibatch_step)
+            running_rewards.append(running_reward)
+
+        plt.plot(minibatch_steps, running_rewards, label = "running reward")
+        plt.legend()
+        plt.show()
 
 
 
