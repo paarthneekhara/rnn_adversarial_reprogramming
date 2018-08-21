@@ -34,10 +34,14 @@ def main():
                         help='Continue Training')
     parser.add_argument('--filter_width', type=int, default=3,
                         help='Filter Width')
-    parser.add_argument('--lstm_hidden_units', type=int, default=200,
+    parser.add_argument('--lstm_hidden_units', type=int, default=256,
                         help='lstm_hidden_units')
+    parser.add_argument('--embedding_size', type=int, default=256,
+                        help='embedding_size')
     parser.add_argument('--random_network', type=str, default="False",
                         help='Random Network')
+    parser.add_argument('--classifier_type', type=str, default="charRNN",
+                        help='rnn type')
 
     args = parser.parse_args()
 
@@ -53,13 +57,25 @@ def main():
         train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
         val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'val')
 
-    lstm_model = model_lstm.charRNN({
-        'vocab_size' : len(base_train_dataset.idx_to_char),
-        'hidden_size' : args.lstm_hidden_units,
-        'target_size' : len(base_train_dataset.classes)
-    })
+    if args.classifier_type == "charRNN":
+        lstm_model = model_lstm.charRNN({
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.lstm_hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+        })
+        print "char RNN"
 
-    lstm_ckpt_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.base_dataset)
+    if args.classifier_type == "biRNN":
+        lstm_model = model_lstm.biRNN({
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.lstm_hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+        })
+        print "BI RNN"
+
+    lstm_ckpt_dir = "{}/{}_classifer_{}".format(args.checkpoints_directory, args.base_dataset, args.classifier_type)
     lstm_ckpt_name = "{}/best_model.pth".format(lstm_ckpt_dir)
     if args.random_network != "True":
         lstm_model.load_state_dict(torch.load(lstm_ckpt_name))
@@ -93,8 +109,10 @@ def main():
                                             'accuracy': CategoricalAccuracy(),
                                         })
     
-    checkpoint_suffix = "{}_{}_{}_random_{}".format(args.learning_rate, args.filter_width, args.batch_size, args.random_network)
-    checkpoints_dir = "{}/{}_adversarial_base_{}, {}".format(args.checkpoints_directory, args.dataset, 
+    checkpoint_suffix = "{}_{}_{}_random_{}_classifer_{}".format(args.learning_rate, args.filter_width, 
+        args.batch_size, args.random_network,args.classifier_type)
+
+    checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(args.checkpoints_directory, args.dataset, 
         args.base_dataset, checkpoint_suffix)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)

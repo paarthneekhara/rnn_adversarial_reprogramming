@@ -14,16 +14,20 @@ import json
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=0.0001,
                         help='Output filename')
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='Output filename')
     parser.add_argument('--dataset', type=str, default="Names",
                         help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
                         help='Check Points Directory')
-    parser.add_argument('--lstm_hidden_units', type=int, default=200,
+    parser.add_argument('--lstm_hidden_units', type=int, default=256,
                         help='lstm_hidden_units')
+    parser.add_argument('--embedding_size', type=int, default=256,
+                        help='embedding_size')
+    parser.add_argument('--classifier_type', type=str, default="charRNN",
+                        help='rnn type')
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -32,11 +36,25 @@ def main():
     train_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train')
     val_dataset = datasets.get_dataset(args.dataset, dataset_type = 'train_val')
 
-    model = model_lstm.charRNN({
-        'vocab_size' : len(train_dataset.idx_to_char),
-        'hidden_size' : args.lstm_hidden_units,
-        'target_size' : len(train_dataset.classes)
-    })
+
+    if args.classifier_type == "charRNN":
+        model = model_lstm.charRNN({
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.lstm_hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+        })
+        print "char RNN"
+
+    if args.classifier_type == "biRNN":
+        model = model_lstm.biRNN({
+            'vocab_size' : len(train_dataset.idx_to_char),
+            'hidden_size' : args.lstm_hidden_units,
+            'target_size' : len(train_dataset.classes),
+            'embedding_size' : args.embedding_size
+
+        })
+        print "BI RNN"
     print device
     model.to(device)
 
@@ -57,7 +75,7 @@ def main():
                                             'nll': Loss(loss_criterion)
                                         })
 
-    checkpoints_dir = "{}/{}_classifer".format(args.checkpoints_directory, args.dataset)
+    checkpoints_dir = "{}/{}_classifer_{}".format(args.checkpoints_directory, args.dataset, args.classifier_type)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
     
@@ -109,7 +127,7 @@ def main():
         with open("{}/training_log.json".format(checkpoints_dir), 'w') as f:
             f.write(json.dumps(training_log))
     
-    trainer.run(train_loader, max_epochs=100)
+    trainer.run(train_loader, max_epochs=200)
     
 if __name__ == '__main__':
     main()
