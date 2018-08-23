@@ -17,7 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description='Training')
     parser.add_argument('--learning_rate', type=float, default=0.005,
                         help='Output filename')
-    parser.add_argument('--reg', type=float, default=0.1,
+    parser.add_argument('--reg', type=float, default=0.01,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='Output filename')
