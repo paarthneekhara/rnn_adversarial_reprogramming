@@ -28,6 +28,8 @@ def main():
                         help='hidden_units')
     parser.add_argument('--embedding_size', type=int, default=256,
                         help='embedding_size')
+    parser.add_argument('--patience', type=int, default=10,
+                        help='patience')
     parser.add_argument('--classifier_type', type=str, default="charRNN",
                         help='rnn type')
     args = parser.parse_args()
@@ -130,8 +132,8 @@ def main():
             'evaluation_metrics' : evaluation_metrics,
         })
 
-        # if (trainer.state.epoch - training_log['best_epoch']) > 5 and (evaluation_metrics['accuracy'] < training_log['best_accuracy']):
-        #     trainer.terminate()
+        if (trainer.state.epoch - training_log['best_epoch']) > args.patience and (evaluation_metrics['accuracy'] < training_log['best_accuracy']):
+            trainer.terminate()
 
         if evaluation_metrics['accuracy'] > training_log['best_accuracy']:
             torch.save(model.state_dict(), "{}/best_model.pth".format(checkpoints_dir))
