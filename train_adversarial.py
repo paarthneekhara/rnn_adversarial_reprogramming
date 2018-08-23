@@ -41,6 +41,8 @@ def main():
                         help='hidden_units')
     parser.add_argument('--embedding_size', type=int, default=256,
                         help='embedding_size')
+    parser.add_argument('--resume_run', type=int, default=-1,
+                        help='Which run to resume')
     parser.add_argument('--random_network', type=str, default="False",
                         help='Random Network')
     parser.add_argument('--classifier_type', type=str, default="charRNN",
@@ -118,15 +120,17 @@ def main():
                                             'accuracy': CategoricalAccuracy(),
                                         })
     
-    checkpoint_suffix = "lr_{}_rg_{}_fw_{}_bs_{}_rd_{}_classifer_{}".format(args.learning_rate, args.reg, args.filter_width, 
-        args.batch_size, args.random_network,args.classifier_type)
-
-    checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(args.checkpoints_directory, args.dataset, 
-        args.base_dataset, checkpoint_suffix)
+    # CHECKPOINT DIRECTORY STUFF.......
+    checkpoints_dir = "{}/ADVERSARIAL".format(args.checkpoints_directory)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
-    checkpoints_dir = "{}/{}".format(checkpoints_dir, str(time.time()))
+    checkpoint_suffix = "lr_{}_rg_{}_fw_{}_bs_{}_rd_{}_classifer_{}".format(args.learning_rate, args.reg, args.filter_width, 
+        args.batch_size, args.random_network,args.classifier_type)
+
+    checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(checkpoints_dir, args.dataset, 
+        args.base_dataset, checkpoint_suffix)
+    
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
@@ -139,15 +143,29 @@ def main():
     }
     running_reward = -args.batch_size
     
+    
     if args.continue_training == "True":
+        if args.resume_run == -1:
+            run_index = len(os.listdir(checkpoints_dir)) - 1
+        else:
+            run_index = args.resume_run
+        checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
+        if not os.path.exists(checkpoints_dir):
+            raise Exception("Coud not find checkpoints_dir")
+
         with open("{}/training_log.json".format(checkpoints_dir)) as tlog_f:
+            print "CHECKSSSSSS"
             training_log = json.load(tlog_f)
 
         seq_model.load_state_dict(torch.load("{}/best_model.pth".format(checkpoints_dir)))
         start_epoch = training_log['best_epoch']
-        # Not really but oh well
         running_reward = training_log['running_reward'][-1]
-
+    else:
+        run_index = len(os.listdir(checkpoints_dir))
+        checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
+        if not os.path.exists(checkpoints_dir):
+            os.makedirs(checkpoints_dir)
+    
     for epoch in range(start_epoch, args.max_epochs):
         new_classifier.train()
         for batch_idx, batch in enumerate(train_loader):
@@ -160,7 +178,7 @@ def main():
             rewards = pred_correctness
             # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
             seq_rewriter_loss = 0
-            max_length_to_update = train_dataset.seq_length + filter_width + 1
+            max_length_to_update = train_dataset.seq_length + args.filter_width + 1
             for idx, log_prob in enumerate(seq_model.saved_log_probs):
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
                     seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
