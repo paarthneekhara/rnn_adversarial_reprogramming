@@ -11,12 +11,13 @@ from ignite.handlers import EarlyStopping
 from torch.utils.data import DataLoader
 import os
 import json
+import time
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
     parser.add_argument('--learning_rate', type=float, default=0.01,
                         help='Output filename')
-    parser.add_argument('--reg', type=float, default=1.0,
+    parser.add_argument('--reg', type=float, default=0.1,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='Output filename')
@@ -117,7 +118,7 @@ def main():
                                             'accuracy': CategoricalAccuracy(),
                                         })
     
-    checkpoint_suffix = "{}_{}_{}_random_{}_classifer_{}".format(args.learning_rate, args.filter_width, 
+    checkpoint_suffix = "lr_{}_rg_{}_fw_{}_bs_{}_rd_{}_classifer_{}".format(args.learning_rate, args.reg, args.filter_width, 
         args.batch_size, args.random_network,args.classifier_type)
 
     checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(args.checkpoints_directory, args.dataset, 
@@ -125,6 +126,9 @@ def main():
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
+    checkpoints_dir = "{}/{}".format(checkpoints_dir, str(time.time()))
+    if not os.path.exists(checkpoints_dir):
+        os.makedirs(checkpoints_dir)
 
     start_epoch = 0
     training_log = {
@@ -156,24 +160,18 @@ def main():
             rewards = pred_correctness
             # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
             seq_rewriter_loss = 0
-            max_length_to_update = 100
+            max_length_to_update = train_dataset.seq_length + filter_width + 1
             for idx, log_prob in enumerate(seq_model.saved_log_probs):
-#                 print idx, log_prob
-                
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
                     seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
 
             seq_rewriter_loss /= (args.batch_size * max_length_to_update)
-            print "Without reg", seq_rewriter_loss
             seq_rewriter_loss += (- args.reg * seq_model.entropy)
-            print "With reg", seq_rewriter_loss
 
             optimizer.zero_grad()
             seq_rewriter_loss.backward()
             optimizer.step()
-#             print "done backward"
             seq_model.saved_log_probs = None
-#             print "Deleted"
             batch_reward = torch.sum(rewards)
             running_reward -= running_reward/(args.log_every_batch * 1.0)
             running_reward += batch_reward/(args.log_every_batch * 1.0)
@@ -189,7 +187,7 @@ def main():
 
         evaluator.run(val_loader)
         evaluation_metrics = evaluator.state.metrics
-        print("Training Results - Epoch: {}  Avg accuracy: {:.2f}"
+        print("Validation Results - Epoch: {}  Avg accuracy: {:.2f}"
               .format(epoch, evaluation_metrics['accuracy']))
 
         training_log['log'].append({
