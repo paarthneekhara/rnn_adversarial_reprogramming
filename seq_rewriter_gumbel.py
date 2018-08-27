@@ -15,6 +15,7 @@ class seq_rewriter(nn.Module):
         self.conv1 = nn.Conv1d(options['vocab_size'], options['target_size'], 
             kernel_size = options['filter_width'], padding = int(options['filter_width']/2))
         self.saved_log_probs = []
+        self.probs = None
         self.entropy = None
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.target_seq_length = options['target_sequence_length']
@@ -22,7 +23,7 @@ class seq_rewriter(nn.Module):
         # self.output_layer = nn.Linear(options['hidden_size'], options['target_size'])
         
 
-    def forward(self, sentence_batch):
+    def forward(self, sentence_batch, temp = 1.0):
         if self.target_seq_length > sentence_batch.size()[1]:
             sentence_batch = F.pad(sentence_batch, (0, self.target_seq_length - sentence_batch.size()[1]))
         else:
@@ -31,20 +32,17 @@ class seq_rewriter(nn.Module):
         one_hot = self.char_embedding(sentence_batch)
         logits = self.conv1(one_hot.permute(0, 2, 1)).permute(0, 2, 1).contiguous()
         
+        logits_shape = logits.size()
         logits = logits.view(logits.size(0) * logits.size(1), logits.size(2))
-        logits += self.eps
-        probs = F.softmax(logits)
-        # log_probs = prob.log()
-        # self.entropy = -(probs*probs.log()).mean()
-
-        m = Categorical(probs)
         if self.training:
-            new_seq = m.sample()
+            probs = F.gumbel_softmax(logits, tau=temp)
         else:
-            _, new_seq = torch.max(probs, 1)
+            probs = F.softmax(logits)
+        self.probs = probs.view(logits_shape[0], logits_shape[1], logits_shape[2])
         
-        self.saved_log_probs = m.log_prob(new_seq)
+        _, new_seq = torch.max(probs, 1)
         new_seq = new_seq.view(sentence_batch.size(0), sentence_batch.size(1))
+
         return new_seq
 
 def main():

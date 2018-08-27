@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import model_classifier, seq_rewriter
+import model_classifier, seq_rewriter_gumbel
 import argparse
 import datasets
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
@@ -15,23 +15,31 @@ import time
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=0.0005,
                         help='Output filename')
+    parser.add_argument('--temp_min', type=float, default=0.01,
+                        help='Temp Min')
+    parser.add_argument('--epochs_to_anneal', type=float, default=15.0,
+                        help='Epoch Number upto which length will be progressed to full length')
+    parser.add_argument('--temp_max', type=float, default=2.0,
+                        help='Temp Max')
     parser.add_argument('--reg', type=float, default=0.01,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='Output filename')
     parser.add_argument('--max_epochs', type=int, default=500,
                         help='Max Epochs')
-    parser.add_argument('--log_every_batch', type=int, default=10,
+    parser.add_argument('--log_every_batch', type=int, default=50,
                         help='Log every batch')
     parser.add_argument('--save_ckpt_every', type=int, default=20,
                         help='Save Checkpoint Every')
-    parser.add_argument('--dataset', type=str, default="Names",
+    parser.add_argument('--dataset', type=str, default="QuestionLabels",
                         help='Output filename')
     parser.add_argument('--base_dataset', type=str, default="Names",
                         help='Output filename')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
+                        help='Check Points Directory')
+    parser.add_argument('--adv_directory', type=str, default="ADVERSARIAL_GUMBEL",
                         help='Check Points Directory')
     parser.add_argument('--continue_training', type=str, default="False",
                         help='Continue Training')
@@ -47,10 +55,11 @@ def main():
                         help='Random Network')
     parser.add_argument('--classifier_type', type=str, default="charRNN",
                         help='rnn type')
+    parser.add_argument('--print_prob', type=str, default="False",
+                        help='Probs')
     parser.add_argument('--progressive', type=str, default="True",
                         help='Progressively increase length for back prop')
-    parser.add_argument('--progress_up_to', type=float, default=30.0,
-                        help='Epoch Number upto which length will be progressed to full length')
+    
 
     args = parser.parse_args()
 
@@ -99,7 +108,7 @@ def main():
     lstm_model.eval()
     lstm_loss_criterion = nn.CrossEntropyLoss()
 
-    seq_model = seq_rewriter.seq_rewriter({
+    seq_model = seq_rewriter_gumbel.seq_rewriter({
         'vocab_size' : len(train_dataset.idx_to_char),
         'target_size' : len(base_train_dataset.idx_to_char),
         'filter_width' : args.filter_width,
@@ -113,6 +122,8 @@ def main():
     new_classifier.to(device)
 
     parameters = filter(lambda p: p.requires_grad, seq_model.parameters())
+    for parameter in parameters:
+        print "PARAMETERS", parameter.size()
 
     optimizer = optim.Adam(parameters, lr=args.learning_rate)
     
@@ -126,127 +137,65 @@ def main():
                                         })
     
     # CHECKPOINT DIRECTORY STUFF.......
-    checkpoints_dir = "{}/ADVERSARIAL".format(args.checkpoints_directory)
+    checkpoints_dir = "{}/{}".format(args.checkpoints_directory, args.adv_directory)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
-    checkpoint_suffix = "lr_{}_rg_{}_fw_{}_bs_{}_rd_{}_classifer_{}".format(args.learning_rate, args.reg, args.filter_width, 
+    checkpoint_suffix = "lr_{}_tmin_{}_fw_{}_bs_{}_rand_{}_classifer_{}".format(args.learning_rate, args.temp_min, args.filter_width, 
         args.batch_size, args.random_network,args.classifier_type)
 
     checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(checkpoints_dir, args.dataset, 
         args.base_dataset, checkpoint_suffix)
     
-    if not os.path.exists(checkpoints_dir):
-        os.makedirs(checkpoints_dir)
-
-    start_epoch = 0
-    training_log = {
-        'log' : [],
-        'best_epoch' : 0,
-        'best_accuracy' : 0.0,
-        'running_reward' : []
-    }
-    running_reward = -args.batch_size
     
-    
-    if args.continue_training == "True":
-        if args.resume_run == -1:
-            run_index = len(os.listdir(checkpoints_dir)) - 1
-        else:
-            run_index = args.resume_run
-        checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
-        if not os.path.exists(checkpoints_dir):
-            raise Exception("Coud not find checkpoints_dir")
-
-        with open("{}/training_log.json".format(checkpoints_dir)) as tlog_f:
-            print "CHECKSSSSSS"
-            training_log = json.load(tlog_f)
-
-        seq_model.load_state_dict(torch.load("{}/best_model.pth".format(checkpoints_dir)))
-        start_epoch = training_log['best_epoch']
-        running_reward = training_log['running_reward'][-1]
+    if args.resume_run == -1:
+        run_index = len(os.listdir(checkpoints_dir)) - 1
     else:
-        run_index = len(os.listdir(checkpoints_dir))
-        checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
-        if not os.path.exists(checkpoints_dir):
-            os.makedirs(checkpoints_dir)
-    
-    for epoch in range(start_epoch, args.max_epochs):
-        new_classifier.train()
-        for batch_idx, batch in enumerate(train_loader):
-            rewritten_x = seq_model(batch[0])
-            pred_logits = lstm_model(rewritten_x)
-            _, predictions = torch.max(pred_logits, 1)
-
-            pred_correctness = (predictions == batch[1]).float()
-            pred_correctness[pred_correctness == 0.0] = -1.0
-            rewards = pred_correctness
-            # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
-            seq_rewriter_loss = 0
-            max_length_to_update = train_dataset.seq_length + args.filter_width + 1
-            if args.progressive == "True":
-                max_length_to_update = min( int( (epoch/args.progress_up_to) * max_length_to_update  ) + 1, max_length_to_update )
-            for idx, log_prob in enumerate(seq_model.saved_log_probs):
-                if (idx % (batch[0].size()[1])) < max_length_to_update:
-                    seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
-
-            seq_rewriter_loss /= (args.batch_size * max_length_to_update)
-            # seq_rewriter_loss += (- args.reg * seq_model.entropy)
-
-            l2_reg = None
-            for W in seq_model.parameters():
-                if l2_reg is None:
-                    l2_reg = W.norm(2)
-                else:
-                    l2_reg = l2_reg + W.norm(2)
-            
-            reg_loss = args.reg * l2_reg
-            seq_rewriter_loss_combined = seq_rewriter_loss + reg_loss
-            optimizer.zero_grad()
-            seq_rewriter_loss_combined.backward()
-            optimizer.step()
-            seq_model.saved_log_probs = None
-
-            batch_reward = torch.sum(rewards)
-            running_reward -= running_reward/(args.log_every_batch * 1.0)
-            running_reward += batch_reward/(args.log_every_batch * 1.0)
-
-            if batch_idx % args.log_every_batch == 0:
-                print ("Epoch[{}] Iteration[{}] Running Reward[{}] LossBasic[{}] RegLoss[{}] max_length_to_update[{}]".format(
-                    epoch, batch_idx, running_reward, seq_rewriter_loss, reg_loss, max_length_to_update))
-                training_log['running_reward'].append(float(running_reward.cpu().numpy()))
-
-        evaluator.run(train_loader)
-        training_metrics = evaluator.state.metrics
-        print("Training Results - Epoch: {}  Avg accuracy: {:.2f}"
-              .format(epoch, training_metrics['accuracy']))
-
-        evaluator.run(val_loader)
-        evaluation_metrics = evaluator.state.metrics
-        print("Validation Results - Epoch: {}  Avg accuracy: {:.2f}"
-              .format(epoch, evaluation_metrics['accuracy']))
-
-        training_log['log'].append({
-            'training_metrics' : training_metrics,
-            'evaluation_metrics' : evaluation_metrics,
-        })
-
-        if evaluation_metrics['accuracy'] > training_log['best_accuracy']:
-            torch.save(seq_model.state_dict(), "{}/best_model.pth".format(checkpoints_dir))
-            training_log['best_accuracy'] = evaluation_metrics['accuracy']
-            training_log['best_epoch'] = epoch
-
-        if epoch % args.save_ckpt_every == 0:
-            torch.save(seq_model.state_dict(), "{}/model_{}.pth".format(checkpoints_dir, epoch))
-
-        print "BEST", training_log['best_epoch'], training_log['best_accuracy']
-        with open("{}/training_log.json".format(checkpoints_dir), 'w') as f:
-            f.write(json.dumps(training_log))
-
+        run_index = args.resume_run
+    checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
     if not os.path.exists(checkpoints_dir):
-        os.makedirs(checkpoints_dir)
+        raise Exception("Coud not find checkpoints_dir")
 
+    with open("{}/training_log.json".format(checkpoints_dir)) as tlog_f:
+        print "CHECKSSSSSS"
+        training_log = json.load(tlog_f)
+
+    seq_model.load_state_dict(torch.load("{}/best_model.pth".format(checkpoints_dir)))
+        # running_reward = training_log['running_reward'][-1]
+    seq_model.eval()
+    lstm_model.eval()
+    new_classifier.eval()
     
+
+    for batch_idx, batch in enumerate(val_loader):
+        original_sentences = batch_to_sentenes(batch[0], val_dataset.idx_to_char )
+        rewritten_x = seq_model(batch[0], temp = 1.0)
+        new_sentences = batch_to_sentenes(rewritten_x, base_train_dataset.idx_to_char )
+
+        pred_logits = lstm_model(seq_model.probs)
+        _, predictions = torch.max(pred_logits, 1)
+
+        results = []
+        for i in range(batch[0].size()[0]):
+            print "ORIG", original_sentences[i]
+            print "REWR", new_sentences[i]
+            print "CLAS", base_train_dataset.classes[int(predictions[i])]
+            print "MAPP", val_dataset.classes[ int(predictions[i])]
+            print "TARG", val_dataset.classes[int(batch[1][i])]
+            print "***************"
+
+        
+
+
+def batch_to_sentenes(batch, idx_to_char):
+    sentences = []
+    for sen_no in range(batch.size()[0]):
+        sent = ""
+        for char_no in range(batch.size()[1]):
+            sent += str(idx_to_char[batch[sen_no][char_no]])
+        sentences.append(sent)
+
+    return sentences
 
 
 if __name__ == '__main__':

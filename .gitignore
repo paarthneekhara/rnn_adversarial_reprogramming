@@ -3,3 +3,8 @@ CKPTS/*
 data.zip
 *.pyc
 .DS_Store
+PLOTS/*
+downloadACESplots.sh
+logs/*
+shehzeen@aceshpu.ucsd.edu
+

@@ -15,8 +15,14 @@ class uniRNN(nn.Module):
 
     def forward(self, sentence_batch, hidden = None):
         # sentence_batch = Variable(sentence_batch)
+        if len(sentence_batch.size()) == 2:
+            char_embedding = self.char_embedding(sentence_batch)
+        else:
+            shape = sentence_batch.size()
+            sentence_batch_flat = sentence_batch.view(shape[0] * shape[1], shape[2])
+            char_embedding = torch.mm(sentence_batch_flat, self.char_embedding.weight)
+            char_embedding = char_embedding.view(shape[0], shape[1], char_embedding.size()[-1])
 
-        char_embedding = self.char_embedding(sentence_batch)
         char_embedding = F.tanh(char_embedding)
 
         if not hidden:
@@ -49,7 +55,14 @@ class biRNN(nn.Module):
     def forward(self, sentence_batch, hidden = None):
         # sentence_batch = Variable(sentence_batch)
 
-        char_embedding = self.char_embedding(sentence_batch)
+        if len(sentence_batch.size()) == 2:
+            char_embedding = self.char_embedding(sentence_batch)
+        else:
+            shape = sentence_batch.size()
+            sentence_batch_flat = sentence_batch.view(shape[0] * shape[1], shape[2])
+            char_embedding = torch.mm(sentence_batch_flat, self.char_embedding.weight)
+            char_embedding = char_embedding.view(shape[0], shape[1], char_embedding.size()[-1])
+            
         char_embedding = F.tanh(char_embedding)
         
         if not hidden:
@@ -83,11 +96,19 @@ class CnnTextClassifier(nn.Module):
 
         self.fc = nn.Linear(options['hidden_size'] * len(window_sizes), options['target_size'])
 
-    def forward(self, x):
-        x = self.embedding(x)           # [B, T, E]
+    def forward(self, sentence_batch):
+        if len(sentence_batch.size()) == 2:
+            char_embedding = self.embedding(sentence_batch)
+        else:
+            shape = sentence_batch.size()
+            sentence_batch_flat = sentence_batch.view(shape[0] * shape[1], shape[2])
+            char_embedding = torch.mm(sentence_batch_flat, self.embedding.weight)
+            char_embedding = char_embedding.view(shape[0], shape[1], char_embedding.size()[-1])
+            
+        # x = self.embedding(char_embedding)           # [B, T, E]
 
         # Apply a convolution + max pool layer for each window size
-        x = torch.unsqueeze(x, 1)       # [B, C, T, E] Add a channel dim.
+        x = torch.unsqueeze(char_embedding, 1)       # [B, C, T, E] Add a channel dim.
         xs = []
         for conv in self.convs:
             x2 = F.relu(conv(x))        # [B, F, T, 1]
@@ -112,8 +133,9 @@ def main():
     }
 
     chrrnn = CnnTextClassifier(rnn_options)
-    sent_batch = torch.LongTensor(32, 10).random_(0, 10)
-    # print chrrnn(sent_batch)
+    sent_batch = torch.FloatTensor(32, 10, 100).random_(0, 10)
+
+    print chrrnn(sent_batch)
 
 
 if __name__ == '__main__':

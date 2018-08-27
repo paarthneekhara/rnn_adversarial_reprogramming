@@ -200,7 +200,7 @@ class QuestionLabels(Dataset):
                 else:
                     class_count[class_name] += 1
 
-        new_vocab = {word : True for word in vocab_count if vocab_count[word] > 3}
+        new_vocab = {word : vocab_count[word] for word in vocab_count if vocab_count[word] > 3}
         vocab_count_pairs = [(-new_vocab[word], word) for word in new_vocab]
         vocab_count_pairs.sort()
         idx_to_char = [pair[1] for pair in vocab_count_pairs]
@@ -398,10 +398,10 @@ class IMDB(Dataset):
         print MAX_LINE_LENGTH, AVG_LINE_LENGTH
         print len(vocab_count)
         
-        new_vocab = {word : True for word in vocab_count if vocab_count[word] > 1}
-        print len(new_vocab)
-        vocab_count_pairs = [(-new_vocab[word], word) for word in new_vocab]
+        
+        vocab_count_pairs = [(-vocab_count[word], word) for word in vocab_count]
         vocab_count_pairs.sort()
+        vocab_count_pairs = vocab_count_pairs[0:10000]
         idx_to_char = [pair[1] for pair in vocab_count_pairs]
         idx_to_char = ["<END>", "<UNK>"] + idx_to_char
         char_to_idx = {idx_to_char[i]:i for i in range(len(idx_to_char))}

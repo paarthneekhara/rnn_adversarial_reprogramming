@@ -132,8 +132,8 @@ def main():
             'evaluation_metrics' : evaluation_metrics,
         })
 
-        if (trainer.state.epoch - training_log['best_epoch']) > args.patience and (evaluation_metrics['accuracy'] < training_log['best_accuracy']):
-            trainer.terminate()
+        # if (trainer.state.epoch - training_log['best_epoch']) > args.patience and (evaluation_metrics['accuracy'] < training_log['best_accuracy']):
+        #     trainer.terminate()
 
         if evaluation_metrics['accuracy'] > training_log['best_accuracy']:
             torch.save(model.state_dict(), "{}/best_model.pth".format(checkpoints_dir))

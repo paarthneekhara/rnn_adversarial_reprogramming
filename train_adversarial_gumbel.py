@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import model_classifier, seq_rewriter
+import model_classifier, seq_rewriter_gumbel
 import argparse
 import datasets
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
@@ -15,19 +15,25 @@ import time
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=0.0005,
                         help='Output filename')
+    parser.add_argument('--temp_min', type=float, default=0.01,
+                        help='Temp Min')
+    parser.add_argument('--epochs_to_anneal', type=float, default=15.0,
+                        help='Epoch Number upto which length will be progressed to full length')
+    parser.add_argument('--temp_max', type=float, default=2.0,
+                        help='Temp Max')
     parser.add_argument('--reg', type=float, default=0.01,
                         help='Output filename')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='Output filename')
     parser.add_argument('--max_epochs', type=int, default=500,
                         help='Max Epochs')
-    parser.add_argument('--log_every_batch', type=int, default=10,
+    parser.add_argument('--log_every_batch', type=int, default=50,
                         help='Log every batch')
     parser.add_argument('--save_ckpt_every', type=int, default=20,
                         help='Save Checkpoint Every')
-    parser.add_argument('--dataset', type=str, default="Names",
+    parser.add_argument('--dataset', type=str, default="QuestionLabels",
                         help='Output filename')
     parser.add_argument('--base_dataset', type=str, default="Names",
                         help='Output filename')
@@ -47,10 +53,11 @@ def main():
                         help='Random Network')
     parser.add_argument('--classifier_type', type=str, default="charRNN",
                         help='rnn type')
+    parser.add_argument('--print_prob', type=str, default="False",
+                        help='Probs')
     parser.add_argument('--progressive', type=str, default="True",
                         help='Progressively increase length for back prop')
-    parser.add_argument('--progress_up_to', type=float, default=30.0,
-                        help='Epoch Number upto which length will be progressed to full length')
+    
 
     args = parser.parse_args()
 
@@ -99,7 +106,7 @@ def main():
     lstm_model.eval()
     lstm_loss_criterion = nn.CrossEntropyLoss()
 
-    seq_model = seq_rewriter.seq_rewriter({
+    seq_model = seq_rewriter_gumbel.seq_rewriter({
         'vocab_size' : len(train_dataset.idx_to_char),
         'target_size' : len(base_train_dataset.idx_to_char),
         'filter_width' : args.filter_width,
@@ -113,6 +120,8 @@ def main():
     new_classifier.to(device)
 
     parameters = filter(lambda p: p.requires_grad, seq_model.parameters())
+    for parameter in parameters:
+        print "PARAMETERS", parameter.size()
 
     optimizer = optim.Adam(parameters, lr=args.learning_rate)
     
@@ -126,11 +135,11 @@ def main():
                                         })
     
     # CHECKPOINT DIRECTORY STUFF.......
-    checkpoints_dir = "{}/ADVERSARIAL".format(args.checkpoints_directory)
+    checkpoints_dir = "{}/ADVERSARIAL_GUMBEL".format(args.checkpoints_directory)
     if not os.path.exists(checkpoints_dir):
         os.makedirs(checkpoints_dir)
 
-    checkpoint_suffix = "lr_{}_rg_{}_fw_{}_bs_{}_rd_{}_classifer_{}".format(args.learning_rate, args.reg, args.filter_width, 
+    checkpoint_suffix = "lr_{}_tmin_{}_fw_{}_bs_{}_rand_{}_classifer_{}".format(args.learning_rate, args.temp_min, args.filter_width, 
         args.batch_size, args.random_network,args.classifier_type)
 
     checkpoints_dir = "{}/{}_adversarial_base_{}_{}".format(checkpoints_dir, args.dataset, 
@@ -148,7 +157,8 @@ def main():
     }
     running_reward = -args.batch_size
     
-    
+    lstm_loss_criterion = nn.CrossEntropyLoss()
+
     if args.continue_training == "True":
         if args.resume_run == -1:
             run_index = len(os.listdir(checkpoints_dir)) - 1
@@ -164,57 +174,48 @@ def main():
 
         seq_model.load_state_dict(torch.load("{}/best_model.pth".format(checkpoints_dir)))
         start_epoch = training_log['best_epoch']
-        running_reward = training_log['running_reward'][-1]
+        # running_reward = training_log['running_reward'][-1]
     else:
         run_index = len(os.listdir(checkpoints_dir))
         checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
         if not os.path.exists(checkpoints_dir):
             os.makedirs(checkpoints_dir)
     
+    temp_min = args.temp_min
+    temp_max = args.temp_max
+
     for epoch in range(start_epoch, args.max_epochs):
         new_classifier.train()
+        epoch_loss = 0
         for batch_idx, batch in enumerate(train_loader):
-            rewritten_x = seq_model(batch[0])
-            pred_logits = lstm_model(rewritten_x)
+            slope = (temp_max - temp_min)/args.epochs_to_anneal
+            temp = max( temp_max - (slope*epoch), temp_min)
+            rewritten_x = seq_model(batch[0], temp = temp)
+            pred_logits = lstm_model(seq_model.probs)
+            # print seq_model.probs
             _, predictions = torch.max(pred_logits, 1)
 
             pred_correctness = (predictions == batch[1]).float()
             pred_correctness[pred_correctness == 0.0] = -1.0
             rewards = pred_correctness
-            # lstm_loss = lstm_loss_criterion(pred_logits, batch[1])
-            seq_rewriter_loss = 0
-            max_length_to_update = train_dataset.seq_length + args.filter_width + 1
-            if args.progressive == "True":
-                max_length_to_update = min( int( (epoch/args.progress_up_to) * max_length_to_update  ) + 1, max_length_to_update )
-            for idx, log_prob in enumerate(seq_model.saved_log_probs):
-                if (idx % (batch[0].size()[1])) < max_length_to_update:
-                    seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
-
-            seq_rewriter_loss /= (args.batch_size * max_length_to_update)
-            # seq_rewriter_loss += (- args.reg * seq_model.entropy)
-
-            l2_reg = None
-            for W in seq_model.parameters():
-                if l2_reg is None:
-                    l2_reg = W.norm(2)
-                else:
-                    l2_reg = l2_reg + W.norm(2)
-            
-            reg_loss = args.reg * l2_reg
-            seq_rewriter_loss_combined = seq_rewriter_loss + reg_loss
-            optimizer.zero_grad()
-            seq_rewriter_loss_combined.backward()
-            optimizer.step()
-            seq_model.saved_log_probs = None
-
             batch_reward = torch.sum(rewards)
+            # print batch_reward
+
+            loss = lstm_loss_criterion(pred_logits, batch[1])
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            # print running_reward/(args.log_every_batch * 1.0)
+            # print batch_reward/(args.log_every_batch * 1.0)
             running_reward -= running_reward/(args.log_every_batch * 1.0)
             running_reward += batch_reward/(args.log_every_batch * 1.0)
 
             if batch_idx % args.log_every_batch == 0:
-                print ("Epoch[{}] Iteration[{}] Running Reward[{}] LossBasic[{}] RegLoss[{}] max_length_to_update[{}]".format(
-                    epoch, batch_idx, running_reward, seq_rewriter_loss, reg_loss, max_length_to_update))
-                training_log['running_reward'].append(float(running_reward.cpu().numpy()))
+                if args.print_prob == "True":
+                    print "Temp", temp, seq_model.probs
+                print ("Epoch[{}] Iteration[{}] RunningLoss[{}] Reward[{}] Temp[{}]".format(
+                    epoch, batch_idx, loss, running_reward, temp))
 
         evaluator.run(train_loader)
         training_metrics = evaluator.state.metrics
@@ -229,6 +230,7 @@ def main():
         training_log['log'].append({
             'training_metrics' : training_metrics,
             'evaluation_metrics' : evaluation_metrics,
+            'temp' : temp
         })
 
         if evaluation_metrics['accuracy'] > training_log['best_accuracy']:
