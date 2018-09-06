@@ -7,4 +7,6 @@ PLOTS/*
 downloadACESplots.sh
 logs/*
 shehzeen@aceshpu.ucsd.edu
-
+*.tex
+filterwidth.numbers
+plots_for_paper/*

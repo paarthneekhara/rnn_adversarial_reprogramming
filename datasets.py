@@ -34,14 +34,19 @@ class NamesTrainingData(Dataset):
         name_data = {}
         
         MAX_NAME_LENGTH = 0
+        avg_length = 0.0
+        count_for_avg = 0
         for file in files:
             with open(file) as f:
                 names = f.read().split("\n")[0:-1]
                 name_data[file] = names
                 for name in names:
+                    avg_length += len(name)
+                    count_for_avg += 1
                     if len(name) > MAX_NAME_LENGTH: MAX_NAME_LENGTH = len(name)
                     for ch in name: char_vocab[ch] = True
         
+        self.avg_length = avg_length/count_for_avg
         idx_to_char = [char for char in char_vocab]
         idx_to_char.sort()
         idx_to_char = ['end'] + idx_to_char
@@ -108,14 +113,19 @@ class SubNamesTrainingData(Dataset):
         name_data = {}
         
         MAX_NAME_LENGTH = 0
+        avg_length = 0.0
+        count_for_avg = 0
         for file in files:
             with open(file) as f:
                 names = f.read().split("\n")[0:-1]
                 name_data[file] = names
                 for name in names:
+                    avg_length += len(name)
+                    count_for_avg += 1
                     if len(name) > MAX_NAME_LENGTH: MAX_NAME_LENGTH = len(name)
                     for ch in name: char_vocab[ch] = True
         
+        self.avg_length = avg_length/count_for_avg
         idx_to_char = [char for char in char_vocab]
         idx_to_char.sort()
         idx_to_char = ['end'] + idx_to_char
@@ -181,11 +191,16 @@ class QuestionLabels(Dataset):
         vocab_count = {}
         class_count = {}
         MAX_LINE_LENGTH = 0
+
+        avg_length = 0.0
+        count_for_avg = 0.0
         for line in lines:
             if len(line) > 1:
                 colon_index = line.find(":")
                 class_name = line[:colon_index]
                 line_words = line[colon_index + 1:].split()
+                avg_length += len(line_words)
+                count_for_avg += 1
                 if len(line_words) > MAX_LINE_LENGTH:
                     MAX_LINE_LENGTH = len(line_words)
                 tokenized_lines.append((line_words, class_name))
@@ -200,6 +215,7 @@ class QuestionLabels(Dataset):
                 else:
                     class_count[class_name] += 1
 
+        self.avg_length = avg_length/count_for_avg
         new_vocab = {word : vocab_count[word] for word in vocab_count if vocab_count[word] > 3}
         vocab_count_pairs = [(-new_vocab[word], word) for word in new_vocab]
         vocab_count_pairs.sort()
@@ -274,6 +290,8 @@ class TwitterArabic(Dataset):
         
         vocab_count = {}
         MAX_LINE_LENGTH = 0
+        avg_length = 0.0
+        count_for_avg = 0
         val_split_idx = int(split * len(all_tweets))
         for tweet in all_tweets[:val_split_idx]:
             for word in tweet[0]:
@@ -281,9 +299,12 @@ class TwitterArabic(Dataset):
                     vocab_count[word] += 1
                 else:
                     vocab_count[word] = 0
+            avg_length += len(tweet[0])
+            count_for_avg += 1
             if len(tweet[0]) > MAX_LINE_LENGTH:
                 MAX_LINE_LENGTH = len(tweet[0])
         
+        self.avg_length = avg_length/count_for_avg
         new_vocab = {word : vocab_count[word] for word in vocab_count if vocab_count[word] > 1}
         vocab_count_pairs = [(-new_vocab[word], word) for word in new_vocab]
         vocab_count_pairs.sort()
@@ -383,7 +404,9 @@ class IMDB(Dataset):
         AVG_LINE_LENGTH = 0.0
         
         
-        
+        for sentiment in all_sentiments_test:
+            AVG_LINE_LENGTH += len(sentiment[0])
+
         for sentiment in all_sentiments:
             for word in sentiment[0]:
                 if word in vocab_count:
@@ -394,7 +417,8 @@ class IMDB(Dataset):
             if len(sentiment[0]) > MAX_LINE_LENGTH:
                 MAX_LINE_LENGTH = len(sentiment[0])
 
-        AVG_LINE_LENGTH = AVG_LINE_LENGTH/len(all_sentiments)
+        AVG_LINE_LENGTH = AVG_LINE_LENGTH/(len(all_sentiments) + len(all_sentiments_test))
+        self.avg_length = AVG_LINE_LENGTH
         print MAX_LINE_LENGTH, AVG_LINE_LENGTH
         print len(vocab_count)
         
@@ -462,7 +486,13 @@ def get_dataset(dataset_name, dataset_type):
         return IMDB(dataset_type = dataset_type)
 
 def main():
-    ndset = IMDB()
+    names = NamesTrainingData()
+    subnames = SubNamesTrainingData()
+    questions = QuestionLabels()
+    twitter = TwitterArabic()
+    imdb = IMDB(dataset_type = "val")
+    for d in [names, subnames, questions, twitter, imdb]:
+        print d.avg_length, len(d.idx_to_char)
 
 if __name__ == '__main__':
     main()

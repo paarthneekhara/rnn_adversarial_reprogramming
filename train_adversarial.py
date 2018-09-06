@@ -190,7 +190,7 @@ def main():
                 if (idx % (batch[0].size()[1])) < max_length_to_update:
                     seq_rewriter_loss += (-log_prob * rewards[idx/rewritten_x.size()[1]])
 
-            seq_rewriter_loss /= (args.batch_size * max_length_to_update)
+            # seq_rewriter_loss /= (args.batch_size * max_length_to_update)
             # seq_rewriter_loss += (- args.reg * seq_model.entropy)
 
             l2_reg = None
@@ -200,7 +200,8 @@ def main():
                 else:
                     l2_reg = l2_reg + W.norm(2)
             
-            reg_loss = args.reg * l2_reg
+            # reg_loss = args.reg * l2_reg
+            reg_loss = 0
             seq_rewriter_loss_combined = seq_rewriter_loss + reg_loss
             optimizer.zero_grad()
             seq_rewriter_loss_combined.backward()

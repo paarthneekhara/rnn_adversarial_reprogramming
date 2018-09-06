@@ -150,10 +150,12 @@ def main():
     
     if args.resume_run == -1:
         run_index = len(os.listdir(checkpoints_dir)) - 1
+        print "CHeck ", run_index
     else:
         run_index = args.resume_run
     checkpoints_dir = "{}/{}".format(checkpoints_dir, run_index)
     if not os.path.exists(checkpoints_dir):
+        print checkpoints_dir
         raise Exception("Coud not find checkpoints_dir")
 
     with open("{}/training_log.json".format(checkpoints_dir)) as tlog_f:
@@ -170,7 +172,7 @@ def main():
     for batch_idx, batch in enumerate(val_loader):
         original_sentences = batch_to_sentenes(batch[0], val_dataset.idx_to_char )
         rewritten_x = seq_model(batch[0], temp = 1.0)
-        new_sentences = batch_to_sentenes(rewritten_x, base_train_dataset.idx_to_char )
+        new_sentences = batch_to_sentenes(rewritten_x, base_train_dataset.idx_to_char, spaces = True )
 
         pred_logits = lstm_model(seq_model.probs)
         _, predictions = torch.max(pred_logits, 1)
@@ -187,12 +189,17 @@ def main():
         
 
 
-def batch_to_sentenes(batch, idx_to_char):
+def batch_to_sentenes(batch, idx_to_char, spaces = False):
     sentences = []
     for sen_no in range(batch.size()[0]):
         sent = ""
         for char_no in range(batch.size()[1]):
-            sent += str(idx_to_char[batch[sen_no][char_no]])
+            if idx_to_char[batch[sen_no][char_no]] == "end":
+                continue
+            if not spaces:
+                sent += str(idx_to_char[batch[sen_no][char_no]])
+            else:
+                sent += " " + str(idx_to_char[batch[sen_no][char_no]])
         sentences.append(sent)
 
     return sentences
