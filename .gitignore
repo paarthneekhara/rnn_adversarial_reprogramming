@@ -10,3 +10,4 @@ shehzeen@aceshpu.ucsd.edu
 *.tex
 filterwidth.numbers
 plots_for_paper/*
+test.py

@@ -16,17 +16,17 @@ import time
 def main():
     parser = argparse.ArgumentParser(description='Training')
     parser.add_argument('--learning_rate', type=float, default=0.0005,
-                        help='Output filename')
+                        help='learning_rate')
     parser.add_argument('--temp_min', type=float, default=0.01,
                         help='Temp Min')
     parser.add_argument('--epochs_to_anneal', type=float, default=15.0,
-                        help='Epoch Number upto which length will be progressed to full length')
+                        help='epochs_to_anneal')
     parser.add_argument('--temp_max', type=float, default=2.0,
                         help='Temp Max')
     parser.add_argument('--reg', type=float, default=0.01,
-                        help='Output filename')
+                        help='regularizer')
     parser.add_argument('--batch_size', type=int, default=8,
-                        help='Output filename')
+                        help='batch_size')
     parser.add_argument('--max_epochs', type=int, default=500,
                         help='Max Epochs')
     parser.add_argument('--log_every_batch', type=int, default=50,
@@ -34,9 +34,9 @@ def main():
     parser.add_argument('--save_ckpt_every', type=int, default=20,
                         help='Save Checkpoint Every')
     parser.add_argument('--dataset', type=str, default="QuestionLabels",
-                        help='Output filename')
+                        help='dataset')
     parser.add_argument('--base_dataset', type=str, default="Names",
-                        help='Output filename')
+                        help='base_dataset')
     parser.add_argument('--checkpoints_directory', type=str, default="CKPTS",
                         help='Check Points Directory')
     parser.add_argument('--continue_training', type=str, default="False",
