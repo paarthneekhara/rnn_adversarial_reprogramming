@@ -35,5 +35,10 @@ Use ```--help``` for setting the hyperparameters for adversarial program trainin
 
 The checkpoints and training logs are saved during both black-box and white-box training. Use ```visualize_logs.py``` to plot the accuracies and reward logged during training.
 
+### Reprodocing the results
+Hyper-parameter details to reproduce the results can be found in the supplementary material of our paper.
+
+![](https://i.imgur.com/hNqWHvO.png)
+
 [1]:https://github.com/pytorch/ignite
 [2]:https://drive.google.com/file/d/1W7bBiDfTaQBOQKs52lfkUXBDtMPvSGfr/view?usp=sharing
