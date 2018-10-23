@@ -8,8 +8,8 @@ https://arxiv.org/abs/1809.01829
 ## Abstract
 *Adversarial Reprogramming has demonstrated success in utilizing pre-trained neural network classifiers for alternative classification tasks without modification to the original network. An adversary in such an attack scenario trains an additive contribution to the inputs to repurpose the neural network for the new classification task. While this reprogramming approach works for neural networks with a continuous input space such as that of images, it is not directly applicable to neural networks trained for tasks such as text classification, where the input space is discrete. In this work, we introduce a context-based vocabulary remapping model to reprogram neural networks trained on a specific sequence classification task, for a new sequence classification task desired by the adversary. We propose training procedures for this adversarial program in both white-box and black-box settings. We demonstrate the application of our model by adversarially repurposing various text-classification models including LSTM, bi-directional LSTM and CNN for alternate classification tasks.*
 
-![](https://i.imgur.com/EkuUZwm.png)
-
+![Left: White-box attack. Right: Black-box attack](https://i.imgur.com/EkuUZwm.png)
+Left: White-box attack. Right: Black-box attack
 ## Requirements
 - Python 2.7.6
 - Pytorch 0.4
